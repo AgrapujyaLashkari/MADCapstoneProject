@@ -1,4 +1,3 @@
-// App.js
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -9,21 +8,14 @@ import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text } from 'react-native';
+import CameraScreen from '../Social/screens/CameraScreen';
+import HomeScreen from './screens/HomeScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Temporary placeholder screens
-function HomeScreen() {
-  return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text>Home Screen</Text></View>;
-}
-
 function ProfileScreen() {
   return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text>Profile Screen</Text></View>;
-}
-
-function CameraScreen() {
-  return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text>Camera Screen</Text></View>;
 }
 
 function MainTabs() {
