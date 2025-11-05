@@ -1,4 +1,3 @@
-// screens/HomeScreen.js
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, Image, RefreshControl } from 'react-native';
 import { Card, Title, Paragraph, Avatar, Text, ActivityIndicator } from 'react-native-paper';

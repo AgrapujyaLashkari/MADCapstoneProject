@@ -1,4 +1,3 @@
-// screens/SignupScreen.js
 import React, { useState } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { TextInput, Button, Text, Title, Snackbar } from 'react-native-paper';
