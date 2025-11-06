@@ -1,3 +1,4 @@
+// App.js
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -6,17 +7,13 @@ import { Provider as PaperProvider } from 'react-native-paper';
 import { supabase } from './supabase';
 import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
-import { Ionicons } from '@expo/vector-icons';
-import { View, Text } from 'react-native';
-import CameraScreen from '../Social/screens/CameraScreen';
 import HomeScreen from './screens/HomeScreen';
+import ProfileScreen from './screens/ProfileScreen';
+import CameraScreen from './screens/CameraScreen';
+import { Ionicons } from '@expo/vector-icons';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
-
-function ProfileScreen() {
-  return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text>Profile Screen</Text></View>;
-}
 
 function MainTabs() {
   return (
