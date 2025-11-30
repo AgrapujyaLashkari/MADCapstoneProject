@@ -1,13 +1,15 @@
 // screens/ProfileScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, Image, ScrollView, Dimensions } from 'react-native';
+import { View, StyleSheet, FlatList, Image, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
 import { Avatar, Title, Button, Text, Card, Divider, ActivityIndicator, Chip } from 'react-native-paper';
 import { supabase } from '../supabase';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 const imageSize = (width - 40) / 3;
 
 export default function ProfileScreen() {
+  const navigation = useNavigation();
   const [profile, setProfile] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -57,9 +59,13 @@ export default function ProfileScreen() {
   };
 
   const renderPost = ({ item }) => (
-    <View style={styles.postItem}>
+    <TouchableOpacity 
+      style={styles.postItem}
+      onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+      activeOpacity={0.7}
+    >
       <Image source={{ uri: item.image_url }} style={styles.postImage} />
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading) {

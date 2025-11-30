@@ -139,6 +139,16 @@ export default function HomeScreen() {
     await contextToggleLike(postId, currentlyLiked);
   };
 
+  const renderFooter = () => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color="#6200ee" />
+        <Text style={styles.loadingText}>Loading more posts...</Text>
+      </View>
+    );
+  };
+
   const renderPost = ({ item }) => {
     return (
       <Card style={styles.card}>
@@ -175,15 +185,6 @@ export default function HomeScreen() {
           </Card.Content>
         </TouchableOpacity>
       </Card>
-    );
-  };
-
-  const renderFooter = () => {
-    if (!loadingMore) return null;
-    return (
-      <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" />
-      </View>
     );
   };
 
@@ -279,5 +280,10 @@ const styles = StyleSheet.create({
   footerLoader: {
     paddingVertical: 20,
     alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
   },
 });
