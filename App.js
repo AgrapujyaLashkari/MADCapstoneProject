@@ -9,6 +9,7 @@ import SignupScreen from './screens/SignupScreen';
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import CameraScreen from './screens/CameraScreen';
+import PostDetailScreen from './screens/PostDetailScreen';
 import { Ionicons } from '@expo/vector-icons';
 
 const Stack = createNativeStackNavigator();
@@ -72,13 +73,36 @@ export default function App() {
   return (
     <PaperProvider>
       <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator>
           {session ? (
-            <Stack.Screen name="MainTabs" component={MainTabs} />
+            <>
+              <Stack.Screen 
+                name="MainTabs" 
+                component={MainTabs} 
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen 
+                name="PostDetail" 
+                component={PostDetailScreen}
+                options={{ 
+                  headerShown: true,
+                  title: 'Post Details',
+                  headerBackTitle: 'Back'
+                }}
+              />
+            </>
           ) : (
             <>
-              <Stack.Screen name="Login" component={LoginScreen} />
-              <Stack.Screen name="Signup" component={SignupScreen} />
+              <Stack.Screen 
+                name="Login" 
+                component={LoginScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen 
+                name="Signup" 
+                component={SignupScreen}
+                options={{ headerShown: false }}
+              />
             </>
           )}
         </Stack.Navigator>

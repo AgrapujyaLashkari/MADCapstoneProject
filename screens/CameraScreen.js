@@ -1,7 +1,7 @@
 // screens/CameraScreen.js
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Image, Alert } from 'react-native';
-import { Button, TextInput, Text, Portal, Modal, ActivityIndicator } from 'react-native-paper';
+import { View, StyleSheet, Image, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { Button, TextInput, Text, ActivityIndicator } from 'react-native-paper';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -29,7 +29,6 @@ export default function CameraScreen({ navigation }) {
           quality: 0.7,
         });
         setPhoto(photo);
-        setModalVisible(true);
       } catch (error) {
         console.error('Error taking picture:', error);
         Alert.alert('Error', 'Failed to take picture');
@@ -48,7 +47,6 @@ export default function CameraScreen({ navigation }) {
       if (!result.canceled) {
         const asset = result.assets[0];
         setPhoto(asset);
-        setModalVisible(true);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -101,7 +99,6 @@ export default function CameraScreen({ navigation }) {
       Alert.alert('Success', 'Post uploaded successfully!');
       setPhoto(null);
       setCaption('');
-      setModalVisible(false);
       navigation.navigate('Home');
     } catch (error) {
       console.error('Error uploading:', error);
@@ -127,6 +124,55 @@ export default function CameraScreen({ navigation }) {
     );
   }
 
+  // Preview screen when photo is selected
+  if (photo) {
+    return (
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <View style={styles.previewContainer}>
+          <Image source={{ uri: photo.uri }} style={styles.previewImage} resizeMode="contain" />
+        </View>
+        
+        <View style={styles.captionContainer}>
+          <TextInput
+            placeholder="Write a caption..."
+            value={caption}
+            onChangeText={setCaption}
+            mode="outlined"
+            style={styles.captionInput}
+            multiline
+            maxLength={500}
+          />
+          <View style={styles.actionButtons}>
+            <Button 
+              mode="outlined" 
+              onPress={() => {
+                setPhoto(null);
+                setCaption('');
+              }}
+              disabled={uploading}
+              style={styles.cancelButton}
+            >
+              Cancel
+            </Button>
+            <Button 
+              mode="contained" 
+              onPress={uploadPost}
+              disabled={uploading}
+              style={styles.postButton}
+            >
+              {uploading ? <ActivityIndicator color="white" /> : 'Post'}
+            </Button>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // Camera screen
   return (
     <View style={styles.container}>
       <CameraView 
@@ -153,50 +199,6 @@ export default function CameraScreen({ navigation }) {
           Gallery
         </Button>
       </View>
-
-      <Portal>
-        <Modal 
-          visible={modalVisible} 
-          onDismiss={() => setModalVisible(false)}
-          contentContainerStyle={styles.modal}
-        >
-          {photo && (
-            <>
-              <Image source={{ uri: photo.uri }} style={styles.preview} />
-              <TextInput
-                label="Caption"
-                value={caption}
-                onChangeText={setCaption}
-                mode="outlined"
-                style={styles.input}
-                multiline
-                numberOfLines={3}
-              />
-              <View style={styles.modalButtons}>
-                <Button 
-                  mode="contained" 
-                  onPress={uploadPost}
-                  disabled={uploading}
-                  style={styles.uploadButton}
-                >
-                  {uploading ? <ActivityIndicator color="white" /> : 'Post'}
-                </Button>
-                <Button 
-                  mode="outlined" 
-                  onPress={() => {
-                    setModalVisible(false);
-                    setPhoto(null);
-                    setCaption('');
-                  }}
-                  disabled={uploading}
-                >
-                  Cancel
-                </Button>
-              </View>
-            </>
-          )}
-        </Modal>
-      </Portal>
     </View>
   );
 }
@@ -204,6 +206,7 @@ export default function CameraScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   camera: {
     flex: 1,
@@ -226,28 +229,37 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     flex: 1,
   },
-  modal: {
-    backgroundColor: 'white',
-    padding: 20,
-    margin: 20,
-    borderRadius: 10,
-    maxHeight: '80%',
+  previewContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  preview: {
+  previewImage: {
     width: '100%',
-    height: 300,
-    borderRadius: 10,
-    marginBottom: 15,
+    height: '100%',
   },
-  input: {
-    marginBottom: 15,
+  captionContainer: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
   },
-  modalButtons: {
+  captionInput: {
+    backgroundColor: '#fff',
+    maxHeight: 100,
+  },
+  actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 10,
     gap: 10,
   },
-  uploadButton: {
+  cancelButton: {
+    flex: 1,
+  },
+  postButton: {
     flex: 1,
   },
 });

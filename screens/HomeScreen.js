@@ -1,12 +1,14 @@
 // screens/HomeScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, Dimensions } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, Dimensions, TouchableOpacity } from 'react-native';
 import { Card, Title, Paragraph, Avatar, Text, ActivityIndicator, IconButton } from 'react-native-paper';
 import { supabase } from '../supabase';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
+  const navigation = useNavigation();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -192,35 +194,44 @@ export default function HomeScreen() {
     }
   };
 
-  const renderPost = ({ item }) => (
-    <Card style={styles.card}>
-      <Card.Title
-        title={item.profiles?.username || 'Unknown User'}
-        left={(props) => <Avatar.Icon {...props} icon="account" />}
-      />
-      
-      <Card.Cover source={{ uri: item.image_url }} style={styles.media} />
-      
-      <Card.Actions style={styles.actions}>
-        <IconButton
-          icon={item.user_has_liked ? 'heart' : 'heart-outline'}
-          iconColor={item.user_has_liked ? '#e91e63' : '#666'}
-          size={28}
-          onPress={() => toggleLike(item.id, item.user_has_liked)}
+  const renderPost = ({ item }) => {
+    return (
+      <Card style={styles.card}>
+        <Card.Title
+          title={item.profiles?.username || 'Unknown User'}
+          left={(props) => <Avatar.Icon {...props} icon="account" />}
         />
-        <Text style={styles.likesCount}>
-          {item.likes_count || 0} {(item.likes_count || 0) === 1 ? 'like' : 'likes'}
-        </Text>
-      </Card.Actions>
-      
-      <Card.Content>
-        <Paragraph>{item.caption}</Paragraph>
-        <Text style={styles.timestamp}>
-          {new Date(item.created_at).toLocaleDateString()}
-        </Text>
-      </Card.Content>
-    </Card>
-  );
+        
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+          activeOpacity={0.9}
+        >
+          <Card.Cover source={{ uri: item.image_url }} style={styles.media} />
+        </TouchableOpacity>
+        
+        <Card.Actions style={styles.actions}>
+          <IconButton
+            icon={item.user_has_liked ? 'heart' : 'heart-outline'}
+            iconColor={item.user_has_liked ? '#e91e63' : '#666'}
+            size={28}
+            onPress={() => toggleLike(item.id, item.user_has_liked)}
+          />
+          <Text style={styles.likesCount}>
+            {item.likes_count || 0} {(item.likes_count || 0) === 1 ? 'like' : 'likes'}
+          </Text>
+        </Card.Actions>
+        
+        <TouchableOpacity onPress={() => navigation.navigate('PostDetail', { postId: item.id })}>
+          <Card.Content>
+            <Paragraph>{item.caption}</Paragraph>
+            <Text style={styles.timestamp}>
+              {new Date(item.created_at).toLocaleDateString()}
+            </Text>
+          </Card.Content>
+        </TouchableOpacity>
+      </Card>
+    );
+  };
 
   const renderFooter = () => {
     if (!loadingMore) return null;
