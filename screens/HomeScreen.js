@@ -1,8 +1,7 @@
 // screens/HomeScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, Image, RefreshControl, Dimensions } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, Dimensions } from 'react-native';
 import { Card, Title, Paragraph, Avatar, Text, ActivityIndicator, IconButton } from 'react-native-paper';
-import { VideoView, useVideoPlayer } from 'expo-video';
 import { supabase } from '../supabase';
 
 const { width } = Dimensions.get('window');
@@ -17,8 +16,7 @@ export default function HomeScreen() {
   const PAGE_SIZE = 10;
 
   useEffect(() => {
-    getCurrentUser();
-    fetchPosts(true);
+    initializeData();
     
     // Setup realtime subscription for likes
     const likesSubscription = supabase
@@ -36,9 +34,11 @@ export default function HomeScreen() {
     };
   }, []);
 
-  const getCurrentUser = async () => {
+  const initializeData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setCurrentUser(user);
+    // Fetch posts after user is set
+    await fetchPosts(true, user);
   };
 
   const handleLikeChange = (payload) => {
@@ -64,37 +64,58 @@ export default function HomeScreen() {
     });
   };
 
-  const fetchPosts = async (isInitial = false) => {
+  const fetchPosts = async (isInitial = false, user = null) => {
     if (!hasMore && !isInitial) return;
     
     try {
+      const userId = user?.id || currentUser?.id;
       const from = isInitial ? 0 : posts.length;
       const to = from + PAGE_SIZE - 1;
 
-      const { data, error } = await supabase
+      // First fetch posts
+      const { data: postsData, error: postsError } = await supabase
         .from('posts')
         .select(`
           *,
-          profiles:user_id (username),
-          likes!left(user_id)
+          profiles:user_id (username)
         `)
         .order('created_at', { ascending: false })
         .range(from, to);
 
-      if (error) throw error;
+      if (postsError) throw postsError;
 
-      const postsWithLikeStatus = data.map(post => ({
-        ...post,
-        user_has_liked: post.likes?.some(like => like.user_id === currentUser?.id) || false
-      }));
+      // Then fetch likes count and user's like status for each post
+      const postsWithLikes = await Promise.all(
+        postsData.map(async (post) => {
+          // Get total likes count
+          const { count, error: countError } = await supabase
+            .from('likes')
+            .select('*', { count: 'exact', head: true })
+            .eq('post_id', post.id);
+
+          // Check if current user has liked
+          const { data: userLike, error: likeError } = await supabase
+            .from('likes')
+            .select('id')
+            .eq('post_id', post.id)
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          return {
+            ...post,
+            likes_count: count || 0,
+            user_has_liked: !!userLike
+          };
+        })
+      );
 
       if (isInitial) {
-        setPosts(postsWithLikeStatus || []);
+        setPosts(postsWithLikes || []);
       } else {
-        setPosts(prev => [...prev, ...(postsWithLikeStatus || [])]);
+        setPosts(prev => [...prev, ...(postsWithLikes || [])]);
       }
       
-      setHasMore(data?.length === PAGE_SIZE);
+      setHasMore(postsData?.length === PAGE_SIZE);
     } catch (error) {
       console.error('Error fetching posts:', error);
     } finally {
@@ -171,21 +192,6 @@ export default function HomeScreen() {
     }
   };
 
-  const PostVideoPlayer = ({ videoUrl }) => {
-    const player = useVideoPlayer(videoUrl, player => {
-      player.loop = true;
-    });
-    
-    return (
-      <VideoView
-        player={player}
-        style={styles.media}
-        allowsFullscreen
-        allowsPictureInPicture
-      />
-    );
-  };
-
   const renderPost = ({ item }) => (
     <Card style={styles.card}>
       <Card.Title
@@ -193,11 +199,7 @@ export default function HomeScreen() {
         left={(props) => <Avatar.Icon {...props} icon="account" />}
       />
       
-      {item.media_type === 'video' ? (
-        <PostVideoPlayer videoUrl={item.video_url} />
-      ) : (
-        <Card.Cover source={{ uri: item.image_url }} style={styles.media} />
-      )}
+      <Card.Cover source={{ uri: item.image_url }} style={styles.media} />
       
       <Card.Actions style={styles.actions}>
         <IconButton

@@ -1,31 +1,20 @@
 // screens/CameraScreen.js
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Image, Alert } from 'react-native';
-import { Button, TextInput, Text, Portal, Modal, ActivityIndicator, SegmentedButtons } from 'react-native-paper';
-import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import { Button, TextInput, Text, Portal, Modal, ActivityIndicator } from 'react-native-paper';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../supabase';
 import { decode } from 'base64-arraybuffer';
 
 export default function CameraScreen({ navigation }) {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
-  const [media, setMedia] = useState(null);
-  const [mediaType, setMediaType] = useState('photo'); // 'photo' or 'video'
+  const [photo, setPhoto] = useState(null);
   const [caption, setCaption] = useState('');
   const [uploading, setUploading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [mode, setMode] = useState('photo'); // 'photo' or 'video'
   const cameraRef = useRef(null);
-  
-  // Create video player when media is a video
-  const videoPlayer = media && mediaType === 'video' ? useVideoPlayer(media.uri, player => {
-    player.loop = true;
-    player.play();
-  }) : null;
 
   useEffect(() => {
     (async () => {
@@ -39,8 +28,7 @@ export default function CameraScreen({ navigation }) {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.7,
         });
-        setMedia(photo);
-        setMediaType('photo');
+        setPhoto(photo);
         setModalVisible(true);
       } catch (error) {
         console.error('Error taking picture:', error);
@@ -49,59 +37,27 @@ export default function CameraScreen({ navigation }) {
     }
   };
 
-  const startRecording = async () => {
-    // Check microphone permission before recording
-    if (!microphonePermission?.granted) {
-      const result = await requestMicrophonePermission();
-      if (!result.granted) {
-        Alert.alert('Permission Required', 'Microphone permission is required to record videos');
-        return;
-      }
-    }
+  const pickFromGallery = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images',
+        allowsEditing: false,
+        quality: 0.7,
+      });
 
-    if (cameraRef.current && !isRecording) {
-      try {
-        setIsRecording(true);
-        const video = await cameraRef.current.recordAsync({
-          maxDuration: 60, // 60 seconds max
-        });
-        setMedia(video);
-        setMediaType('video');
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        setPhoto(asset);
         setModalVisible(true);
-      } catch (error) {
-        console.error('Error recording video:', error);
-        Alert.alert('Error', 'Failed to record video: ' + error.message);
-      } finally {
-        setIsRecording(false);
       }
-    }
-  };
-
-  const stopRecording = () => {
-    if (cameraRef.current && isRecording) {
-      cameraRef.current.stopRecording();
-    }
-  };
-
-  const pickMedia = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: mode === 'photo' ? ImagePicker.MediaTypeOptions.Images : ImagePicker.MediaTypeOptions.Videos,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
-      videoMaxDuration: 60,
-    });
-
-    if (!result.canceled) {
-      const asset = result.assets[0];
-      setMedia(asset);
-      setMediaType(asset.type === 'video' ? 'video' : 'photo');
-      setModalVisible(true);
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image from gallery');
     }
   };
 
   const uploadPost = async () => {
-    if (!media || !caption.trim()) {
+    if (!photo || !caption.trim()) {
       Alert.alert('Error', 'Please add a caption');
       return;
     }
@@ -110,82 +66,40 @@ export default function CameraScreen({ navigation }) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      let fileUrl;
+      // Read file as base64
+      const base64 = await FileSystem.readAsStringAsync(photo.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
       
-      if (mediaType === 'photo') {
-        // Read file as base64
-        const base64 = await FileSystem.readAsStringAsync(media.uri, {
-          encoding: FileSystem.EncodingType.Base64,
+      // Upload image to Supabase Storage
+      const fileName = `${user.id}/${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('posts')
+        .upload(fileName, decode(base64), {
+          contentType: 'image/jpeg',
         });
-        
-        // Upload image to Supabase Storage
-        const fileName = `${user.id}/${Date.now()}.jpg`;
-        const { error: uploadError } = await supabase.storage
-          .from('posts')
-          .upload(fileName, decode(base64), {
-            contentType: 'image/jpeg',
-          });
 
-        if (uploadError) throw uploadError;
+      if (uploadError) throw uploadError;
 
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('posts')
-          .getPublicUrl(fileName);
-        
-        fileUrl = publicUrl;
-      } else {
-        // Upload video
-        const fileUri = media.uri;
-        const fileInfo = await FileSystem.getInfoAsync(fileUri);
-        
-        if (!fileInfo.exists) {
-          throw new Error('Video file does not exist');
-        }
-
-        // Read file as base64
-        const base64 = await FileSystem.readAsStringAsync(fileUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        
-        const fileName = `${user.id}/${Date.now()}.mp4`;
-        const { error: uploadError } = await supabase.storage
-          .from('posts')
-          .upload(fileName, decode(base64), {
-            contentType: 'video/mp4',
-          });
-
-        if (uploadError) throw uploadError;
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('posts')
-          .getPublicUrl(fileName);
-        
-        fileUrl = publicUrl;
-      }
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('posts')
+        .getPublicUrl(fileName);
 
       // Save post to database
-      const postData = {
-        user_id: user.id,
-        caption: caption,
-        media_type: mediaType,
-      };
-
-      if (mediaType === 'photo') {
-        postData.image_url = fileUrl;
-      } else {
-        postData.video_url = fileUrl;
-      }
-
       const { error: dbError } = await supabase
         .from('posts')
-        .insert([postData]);
+        .insert([{
+          user_id: user.id,
+          caption: caption,
+          media_type: 'photo',
+          image_url: publicUrl
+        }]);
 
       if (dbError) throw dbError;
 
       Alert.alert('Success', 'Post uploaded successfully!');
-      setMedia(null);
+      setPhoto(null);
       setCaption('');
       setModalVisible(false);
       navigation.navigate('Home');
@@ -197,20 +111,17 @@ export default function CameraScreen({ navigation }) {
     }
   };
 
-  if (!cameraPermission || !microphonePermission) {
+  if (!cameraPermission) {
     return <View style={styles.container}><Text>Requesting permissions...</Text></View>;
   }
-  if (!cameraPermission.granted || !microphonePermission.granted) {
+  if (!cameraPermission.granted) {
     return (
       <View style={styles.container}>
         <Text style={{ textAlign: 'center', marginBottom: 10, padding: 20 }}>
-          We need camera and microphone permissions for taking photos and recording videos
+          We need camera permission to take photos
         </Text>
-        <Button mode="contained" onPress={() => {
-          requestCameraPermission();
-          requestMicrophonePermission();
-        }} style={{ marginHorizontal: 20 }}>
-          Grant Permissions
+        <Button mode="contained" onPress={requestCameraPermission} style={{ marginHorizontal: 20 }}>
+          Grant Permission
         </Button>
       </View>
     );
@@ -222,50 +133,26 @@ export default function CameraScreen({ navigation }) {
         style={styles.camera} 
         ref={cameraRef} 
         facing="back"
-        mode={mode}
-      >
-        <View style={styles.topControls}>
-          <SegmentedButtons
-            value={mode}
-            onValueChange={setMode}
-            buttons={[
-              { value: 'photo', label: 'Photo', icon: 'camera' },
-              { value: 'video', label: 'Video', icon: 'video' },
-            ]}
-            style={styles.segmentedButtons}
-          />
-        </View>
-        
-        <View style={styles.buttonContainer}>
-          {mode === 'photo' ? (
-            <Button 
-              mode="contained" 
-              onPress={takePicture}
-              style={styles.captureButton}
-              icon="camera"
-            >
-              Take Photo
-            </Button>
-          ) : (
-            <Button 
-              mode="contained" 
-              onPress={isRecording ? stopRecording : startRecording}
-              style={[styles.captureButton, isRecording && styles.recordingButton]}
-              icon={isRecording ? 'stop' : 'video'}
-            >
-              {isRecording ? 'Stop Recording' : 'Record Video'}
-            </Button>
-          )}
-          <Button 
-            mode="contained" 
-            onPress={pickMedia}
-            style={styles.galleryButton}
-            icon="image"
-          >
-            Gallery
-          </Button>
-        </View>
-      </CameraView>
+      />
+      
+      <View style={styles.buttonContainer}>
+        <Button 
+          mode="contained" 
+          onPress={takePicture}
+          style={styles.captureButton}
+          icon="camera"
+        >
+          Take Photo
+        </Button>
+        <Button 
+          mode="contained" 
+          onPress={pickFromGallery}
+          style={styles.galleryButton}
+          icon="image"
+        >
+          Gallery
+        </Button>
+      </View>
 
       <Portal>
         <Modal 
@@ -273,20 +160,9 @@ export default function CameraScreen({ navigation }) {
           onDismiss={() => setModalVisible(false)}
           contentContainerStyle={styles.modal}
         >
-          {media && (
+          {photo && (
             <>
-              {mediaType === 'photo' ? (
-                <Image source={{ uri: media.uri }} style={styles.preview} />
-              ) : (
-                videoPlayer && (
-                  <VideoView
-                    player={videoPlayer}
-                    style={styles.preview}
-                    allowsFullscreen
-                    allowsPictureInPicture
-                  />
-                )
-              )}
+              <Image source={{ uri: photo.uri }} style={styles.preview} />
               <TextInput
                 label="Caption"
                 value={caption}
@@ -309,7 +185,7 @@ export default function CameraScreen({ navigation }) {
                   mode="outlined" 
                   onPress={() => {
                     setModalVisible(false);
-                    setMedia(null);
+                    setPhoto(null);
                     setCaption('');
                   }}
                   disabled={uploading}
@@ -332,32 +208,23 @@ const styles = StyleSheet.create({
   camera: {
     flex: 1,
   },
-  topControls: {
-    position: 'absolute',
-    top: 60,
-    left: 20,
-    right: 20,
-    zIndex: 1,
-  },
-  segmentedButtons: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-  },
   buttonContainer: {
-    flex: 1,
-    backgroundColor: 'transparent',
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    alignItems: 'flex-end',
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    zIndex: 1,
   },
   captureButton: {
     marginHorizontal: 10,
-  },
-  recordingButton: {
-    backgroundColor: '#e91e63',
+    flex: 1,
   },
   galleryButton: {
     marginHorizontal: 10,
+    flex: 1,
   },
   modal: {
     backgroundColor: 'white',
