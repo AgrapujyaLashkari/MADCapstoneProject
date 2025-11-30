@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Provider as PaperProvider } from 'react-native-paper';
+import { AppProvider } from './context/AppContext';
 import { supabase } from './supabase';
 import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
@@ -71,9 +72,10 @@ export default function App() {
   }
 
   return (
-    <PaperProvider>
-      <NavigationContainer>
-        <Stack.Navigator>
+    <AppProvider>
+      <PaperProvider>
+        <NavigationContainer>
+          <Stack.Navigator>
           {session ? (
             <>
               <Stack.Screen 
@@ -108,5 +110,6 @@ export default function App() {
         </Stack.Navigator>
       </NavigationContainer>
     </PaperProvider>
+    </AppProvider>
   );
 }

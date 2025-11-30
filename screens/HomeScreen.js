@@ -4,21 +4,23 @@ import { View, StyleSheet, FlatList, RefreshControl, Dimensions, TouchableOpacit
 import { Card, Title, Paragraph, Avatar, Text, ActivityIndicator, IconButton } from 'react-native-paper';
 import { supabase } from '../supabase';
 import { useNavigation } from '@react-navigation/native';
+import { useApp } from '../context/AppContext';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const navigation = useNavigation();
-  const [posts, setPosts] = useState([]);
+  const { user, posts: contextPosts, setPosts, toggleLike: contextToggleLike } = useApp();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [currentUser, setCurrentUser] = useState(null);
   const PAGE_SIZE = 10;
 
   useEffect(() => {
-    initializeData();
+    if (user) {
+      fetchPosts(true, user);
+    }
     
     // Setup realtime subscription for likes
     const likesSubscription = supabase
@@ -34,14 +36,7 @@ export default function HomeScreen() {
     return () => {
       likesSubscription.unsubscribe();
     };
-  }, []);
-
-  const initializeData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setCurrentUser(user);
-    // Fetch posts after user is set
-    await fetchPosts(true, user);
-  };
+  }, [user]);
 
   const handleLikeChange = (payload) => {
     setPosts(prevPosts => {
@@ -51,13 +46,13 @@ export default function HomeScreen() {
             return {
               ...post,
               likes_count: (post.likes_count || 0) + 1,
-              user_has_liked: payload.new.user_id === currentUser?.id ? true : post.user_has_liked
+              user_has_liked: payload.new.user_id === user?.id ? true : post.user_has_liked
             };
           } else if (payload.eventType === 'DELETE') {
             return {
               ...post,
               likes_count: Math.max(0, (post.likes_count || 0) - 1),
-              user_has_liked: payload.old.user_id === currentUser?.id ? false : post.user_has_liked
+              user_has_liked: payload.old.user_id === user?.id ? false : post.user_has_liked
             };
           }
         }
@@ -66,12 +61,12 @@ export default function HomeScreen() {
     });
   };
 
-  const fetchPosts = async (isInitial = false, user = null) => {
+  const fetchPosts = async (isInitial = false, currentUser = null) => {
     if (!hasMore && !isInitial) return;
     
     try {
-      const userId = user?.id || currentUser?.id;
-      const from = isInitial ? 0 : posts.length;
+      const userId = currentUser?.id || user?.id;
+      const from = isInitial ? 0 : contextPosts.length;
       const to = from + PAGE_SIZE - 1;
 
       // First fetch posts
@@ -114,7 +109,7 @@ export default function HomeScreen() {
       if (isInitial) {
         setPosts(postsWithLikes || []);
       } else {
-        setPosts(prev => [...prev, ...(postsWithLikes || [])]);
+        setPosts([...contextPosts, ...(postsWithLikes || [])]);
       }
       
       setHasMore(postsData?.length === PAGE_SIZE);
@@ -130,7 +125,7 @@ export default function HomeScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     setHasMore(true);
-    fetchPosts(true);
+    fetchPosts(true, user);
   };
 
   const loadMore = () => {
@@ -141,57 +136,7 @@ export default function HomeScreen() {
   };
 
   const toggleLike = async (postId, currentlyLiked) => {
-    // Optimistic update
-    setPosts(prevPosts => 
-      prevPosts.map(post => 
-        post.id === postId 
-          ? { 
-              ...post, 
-              user_has_liked: !currentlyLiked,
-              likes_count: currentlyLiked ? (post.likes_count || 1) - 1 : (post.likes_count || 0) + 1
-            }
-          : post
-      )
-    );
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (currentlyLiked) {
-        // Unlike
-        const { error } = await supabase
-          .from('likes')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
-        
-        if (error) throw error;
-      } else {
-        // Like - use upsert to avoid duplicate key errors
-        const { error } = await supabase
-          .from('likes')
-          .upsert([{ post_id: postId, user_id: user.id }], {
-            onConflict: 'user_id,post_id',
-            ignoreDuplicates: false
-          });
-        
-        if (error) throw error;
-      }
-    } catch (error) {
-      console.error('Error toggling like:', error);
-      // Revert optimistic update on error
-      setPosts(prevPosts => 
-        prevPosts.map(post => 
-          post.id === postId 
-            ? { 
-                ...post, 
-                user_has_liked: currentlyLiked,
-                likes_count: currentlyLiked ? (post.likes_count || 0) + 1 : (post.likes_count || 1) - 1
-              }
-            : post
-        )
-      );
-    }
+    await contextToggleLike(postId, currentlyLiked);
   };
 
   const renderPost = ({ item }) => {
@@ -255,13 +200,13 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Title style={styles.headerTitle}>Social Feed</Title>
       </View>
-      {posts.length === 0 ? (
+      {contextPosts.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No posts yet. Be the first to post!</Text>
         </View>
       ) : (
         <FlatList
-          data={posts}
+          data={contextPosts}
           renderItem={renderPost}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}

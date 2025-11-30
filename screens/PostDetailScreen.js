@@ -2,59 +2,26 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Image, ScrollView, Dimensions } from 'react-native';
 import { Card, Title, Paragraph, Avatar, Text, IconButton, Divider } from 'react-native-paper';
-import { supabase } from '../supabase';
+import { useApp } from '../context/AppContext';
 
 const { width } = Dimensions.get('window');
 
 export default function PostDetailScreen({ route }) {
   const { postId } = route.params;
+  const { user, fetchPostWithLikes, toggleLike: contextToggleLike } = useApp();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    getCurrentUser();
-    fetchPostDetail();
-  }, []);
+    if (user) {
+      loadPost();
+    }
+  }, [user]);
 
-  const getCurrentUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setCurrentUser(user);
-  };
-
-  const fetchPostDetail = async () => {
+  const loadPost = async () => {
     try {
-      // Fetch post details
-      const { data: postData, error: postError } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          profiles:user_id (username)
-        `)
-        .eq('id', postId)
-        .single();
-
-      if (postError) throw postError;
-
-      // Get total likes count
-      const { count, error: countError } = await supabase
-        .from('likes')
-        .select('*', { count: 'exact', head: true })
-        .eq('post_id', postId);
-
-      // Check if current user has liked
-      const { data: userLike, error: likeError } = await supabase
-        .from('likes')
-        .select('id')
-        .eq('post_id', postId)
-        .eq('user_id', currentUser?.id)
-        .maybeSingle();
-
-      setPost({
-        ...postData,
-        likes_count: count || 0,
-        user_has_liked: !!userLike
-      });
+      const postData = await fetchPostWithLikes(postId);
+      setPost(postData);
     } catch (error) {
       console.error('Error fetching post detail:', error);
     } finally {
@@ -64,48 +31,12 @@ export default function PostDetailScreen({ route }) {
 
   const toggleLike = async () => {
     if (!post) return;
-
-    const currentlyLiked = post.user_has_liked;
-
-    // Optimistic update
-    setPost(prev => ({
-      ...prev,
-      user_has_liked: !currentlyLiked,
-      likes_count: currentlyLiked ? (prev.likes_count || 1) - 1 : (prev.likes_count || 0) + 1
-    }));
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (currentlyLiked) {
-        // Unlike
-        const { error } = await supabase
-          .from('likes')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
-        
-        if (error) throw error;
-      } else {
-        // Like
-        const { error } = await supabase
-          .from('likes')
-          .upsert([{ post_id: postId, user_id: user.id }], {
-            onConflict: 'user_id,post_id',
-            ignoreDuplicates: false
-          });
-        
-        if (error) throw error;
-      }
-    } catch (error) {
-      console.error('Error toggling like:', error);
-      // Revert optimistic update on error
-      setPost(prev => ({
-        ...prev,
-        user_has_liked: currentlyLiked,
-        likes_count: currentlyLiked ? (prev.likes_count || 0) + 1 : (prev.likes_count || 1) - 1
-      }));
-    }
+    
+    // Use context to handle like toggle (with optimistic updates)
+    await contextToggleLike(post.id, post.user_has_liked);
+    
+    // Reload post to ensure UI is in sync with context
+    await loadPost();
   };
 
   if (loading || !post) {
