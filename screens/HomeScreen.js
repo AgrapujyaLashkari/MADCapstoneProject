@@ -2,11 +2,31 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl, Dimensions, TouchableOpacity } from 'react-native';
 import { Card, Title, Paragraph, Avatar, Text, ActivityIndicator, IconButton } from 'react-native-paper';
+import { VideoView, useVideoPlayer } from 'expo-video'; // Import useVideoPlayer
 import { supabase } from '../supabase';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
 
 const { width } = Dimensions.get('window');
+
+// --- NEW COMPONENT: Handles individual video items safely ---
+const FeedVideo = ({ uri }) => {
+  // Initialize the player using the hook
+  const player = useVideoPlayer(uri, player => {
+    player.loop = true;
+    // Note: We usually don't want auto-play in a feed as it consumes data/battery
+    // player.play(); 
+  });
+
+  return (
+    <VideoView
+      style={styles.media}
+      player={player}
+      nativeControls
+      // allowsFullscreen is deprecated, handling via nativeControls usually suffices
+    />
+  );
+};
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -22,7 +42,6 @@ export default function HomeScreen() {
       fetchPosts(true, user);
     }
     
-    // Setup realtime subscription for likes
     const likesSubscription = supabase
       .channel('likes_changes')
       .on('postgres_changes', 
@@ -69,29 +88,22 @@ export default function HomeScreen() {
       const from = isInitial ? 0 : contextPosts.length;
       const to = from + PAGE_SIZE - 1;
 
-      // First fetch posts
       const { data: postsData, error: postsError } = await supabase
         .from('posts')
-        .select(`
-          *,
-          profiles:user_id (username)
-        `)
+        .select(`*, profiles:user_id (username)`)
         .order('created_at', { ascending: false })
         .range(from, to);
 
       if (postsError) throw postsError;
 
-      // Then fetch likes count and user's like status for each post
       const postsWithLikes = await Promise.all(
         postsData.map(async (post) => {
-          // Get total likes count
-          const { count, error: countError } = await supabase
+          const { count } = await supabase
             .from('likes')
             .select('*', { count: 'exact', head: true })
             .eq('post_id', post.id);
 
-          // Check if current user has liked
-          const { data: userLike, error: likeError } = await supabase
+          const { data: userLike } = await supabase
             .from('likes')
             .select('id')
             .eq('post_id', post.id)
@@ -149,19 +161,28 @@ export default function HomeScreen() {
     );
   };
 
+  // Modified renderPost to use the new FeedVideo component
   const renderPost = ({ item }) => {
     return (
       <Card style={styles.card}>
         <Card.Title
           title={item.profiles?.username || 'Unknown User'}
           left={(props) => <Avatar.Icon {...props} icon="account" />}
+          right={(props) => item.media_type === 'video' ? (
+            <IconButton {...props} icon="video" size={20} />
+          ) : null}
         />
         
         <TouchableOpacity 
           onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
           activeOpacity={0.9}
         >
-          <Card.Cover source={{ uri: item.image_url }} style={styles.media} />
+          {item.media_type === 'video' ? (
+            // FIX: Using the separated component here
+            <FeedVideo uri={item.image_url} />
+          ) : (
+            <Card.Cover source={{ uri: item.image_url }} style={styles.media} />
+          )}
         </TouchableOpacity>
         
         <Card.Actions style={styles.actions}>
@@ -262,6 +283,8 @@ const styles = StyleSheet.create({
   },
   media: {
     height: 300,
+    width: '100%', // Ensure width is set for video
+    backgroundColor: '#000', // Good practice for loading state
   },
   actions: {
     paddingLeft: 8,

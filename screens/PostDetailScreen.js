@@ -2,9 +2,28 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Image, ScrollView, Dimensions } from 'react-native';
 import { Card, Title, Paragraph, Avatar, Text, IconButton, Divider } from 'react-native-paper';
+import { VideoView, useVideoPlayer } from 'expo-video'; // Import hook
 import { useApp } from '../context/AppContext';
 
 const { width } = Dimensions.get('window');
+
+// Helper component for Post Details video
+const PostVideoPlayer = ({ uri }) => {
+  const player = useVideoPlayer(uri, player => {
+    player.loop = true;
+    // Don't auto-play in details unless desired
+    player.play(); 
+  });
+
+  return (
+    <VideoView
+      style={styles.fullVideo}
+      player={player}
+      nativeControls
+      allowsFullscreen
+    />
+  );
+};
 
 export default function PostDetailScreen({ route }) {
   const { postId } = route.params;
@@ -12,10 +31,9 @@ export default function PostDetailScreen({ route }) {
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // ... (Keep existing useEffect and helper functions) ...
   useEffect(() => {
-    if (user) {
-      loadPost();
-    }
+    if (user) loadPost();
   }, [user]);
 
   const loadPost = async () => {
@@ -31,20 +49,12 @@ export default function PostDetailScreen({ route }) {
 
   const toggleLike = async () => {
     if (!post) return;
-    
-    // Use context to handle like toggle (with optimistic updates)
     await contextToggleLike(post.id, post.user_has_liked);
-    
-    // Reload post to ensure UI is in sync with context
     await loadPost();
   };
 
   if (loading || !post) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text>Loading...</Text>
-      </View>
-    );
+    return <View style={styles.loadingContainer}><Text>Loading...</Text></View>;
   }
 
   return (
@@ -57,15 +67,22 @@ export default function PostDetailScreen({ route }) {
             {new Date(post.created_at).toLocaleDateString()}
           </Text>
         </View>
+        {post.media_type === 'video' && <IconButton icon="video" size={24} />}
       </View>
 
-      <Image 
-        source={{ uri: post.image_url }} 
-        style={styles.fullImage}
-        resizeMode="contain"
-      />
+      {/* FIX: Use helper component for video */}
+      {post.media_type === 'video' ? (
+        <PostVideoPlayer uri={post.image_url} />
+      ) : (
+        <Image 
+          source={{ uri: post.image_url }} 
+          style={styles.fullImage}
+          resizeMode="contain"
+        />
+      )}
 
-      <View style={styles.actionsContainer}>
+      {/* ... (Rest of your UI remains exactly the same) ... */}
+       <View style={styles.actionsContainer}>
         <View style={styles.likeSection}>
           <IconButton
             icon={post.user_has_liked ? 'heart' : 'heart-outline'}
@@ -100,80 +117,24 @@ export default function PostDetailScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-  },
-  userInfo: {
-    marginLeft: 10,
-    flex: 1,
-  },
-  username: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  timestamp: {
-    fontSize: 12,
-    color: '#666',
-  },
-  fullImage: {
-    width: width,
-    height: width,
-    backgroundColor: '#f0f0f0',
-  },
-  actionsContainer: {
-    paddingHorizontal: 10,
-  },
-  likeSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  likesText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: -5,
-  },
-  captionContainer: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-  },
-  caption: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  divider: {
-    marginVertical: 15,
-  },
-  commentsSection: {
-    padding: 15,
-  },
-  commentsTitle: {
-    fontSize: 18,
-    marginBottom: 15,
-  },
-  comingSoonContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  comingSoonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#666',
-    marginBottom: 8,
-  },
-  comingSoonSubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-  },
+  // ... (Keep existing styles)
+  container: { flex: 1, backgroundColor: '#fff' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 15 },
+  userInfo: { marginLeft: 10, flex: 1 },
+  username: { fontSize: 16, fontWeight: 'bold' },
+  timestamp: { fontSize: 12, color: '#666' },
+  fullImage: { width: width, height: width, backgroundColor: '#f0f0f0' },
+  fullVideo: { width: width, height: width, backgroundColor: '#000' }, // Ensure this matches
+  actionsContainer: { paddingHorizontal: 10 },
+  likeSection: { flexDirection: 'row', alignItems: 'center' },
+  likesText: { fontSize: 14, fontWeight: '600', marginLeft: -5 },
+  captionContainer: { paddingHorizontal: 15, paddingVertical: 10 },
+  caption: { fontSize: 14, lineHeight: 20 },
+  divider: { marginVertical: 15 },
+  commentsSection: { padding: 15 },
+  commentsTitle: { fontSize: 18, marginBottom: 15 },
+  comingSoonContainer: { alignItems: 'center', paddingVertical: 40 },
+  comingSoonText: { fontSize: 20, fontWeight: 'bold', color: '#666', marginBottom: 8 },
+  comingSoonSubtext: { fontSize: 14, color: '#999', textAlign: 'center' },
 });
