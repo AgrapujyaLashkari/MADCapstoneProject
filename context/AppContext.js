@@ -10,6 +10,7 @@ const SET_POSTS = 'SET_POSTS';
 const UPDATE_POST_LIKE = 'UPDATE_POST_LIKE';
 const ADD_POSTS = 'ADD_POSTS';
 const SET_LOADING = 'SET_LOADING';
+const DELETE_POST = 'DELETE_POST';
 
 // Initial state
 const initialState = {
@@ -44,6 +45,12 @@ function appReducer(state, action) {
               }
             : post
         )
+      };
+    
+    case DELETE_POST:
+      return {
+        ...state,
+        posts: state.posts.filter(post => post.id !== action.payload)
       };
     
     case SET_LOADING:
@@ -161,6 +168,51 @@ export function AppProvider({ children }) {
     }
   };
 
+  const deletePost = async (postId, imageUrl) => {
+    if (!state.user) return { success: false, error: 'User not authenticated' };
+
+    try {
+      // First, delete the image from storage
+      if (imageUrl) {
+        // Extract the file path from the URL
+        const urlParts = imageUrl.split('/posts/');
+        if (urlParts.length > 1) {
+          const filePath = urlParts[1].split('?')[0]; // Remove query params if any
+          const { error: storageError } = await supabase.storage
+            .from('posts')
+            .remove([filePath]);
+          
+          if (storageError) {
+            console.error('Error deleting image:', storageError);
+          }
+        }
+      }
+
+      // Delete all likes associated with the post
+      await supabase
+        .from('likes')
+        .delete()
+        .eq('post_id', postId);
+
+      // Delete the post from database
+      const { error: deleteError } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId)
+        .eq('user_id', state.user.id); // Ensure user owns the post
+
+      if (deleteError) throw deleteError;
+
+      // Update local state
+      dispatch({ type: DELETE_POST, payload: postId });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
   const value = {
     user: state.user,
     posts: state.posts,
@@ -170,6 +222,7 @@ export function AppProvider({ children }) {
     toggleLike,
     fetchPostWithLikes,
     updatePostLike,
+    deletePost,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -1,8 +1,10 @@
+// App.js
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Provider as PaperProvider } from 'react-native-paper';
+import { SafeAreaProvider } from 'react-native-safe-area-context'; // <--- IMPORT THIS
 import { AppProvider } from './context/AppContext';
 import { supabase } from './supabase';
 import LoginScreen from './screens/LoginScreen';
@@ -29,11 +31,15 @@ function MainTabs() {
           } else if (route.name === 'Camera') {
             iconName = 'add-circle';
           }
-          return <Ionicons name={iconName} size={route.name === 'Camera' ? 40 : size} color={color} />;
+          return <Ionicons name={iconName} size={route.name === 'Camera' ? 32 : size} color={color} />;
         },
         tabBarActiveTintColor: '#6200ee',
         tabBarInactiveTintColor: 'gray',
         tabBarShowLabel: route.name !== 'Camera',
+        tabBarStyle: {
+          paddingBottom: 5,
+          paddingTop: 8,
+        },
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
@@ -42,7 +48,7 @@ function MainTabs() {
         component={CameraScreen} 
         options={{ 
           headerShown: false,
-          tabBarLabel: 'Post'
+          tabBarLabel: 'Post',
         }} 
       />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
@@ -72,44 +78,46 @@ export default function App() {
   }
 
   return (
-    <AppProvider>
-      <PaperProvider>
-        <NavigationContainer>
-          <Stack.Navigator>
-          {session ? (
-            <>
-              <Stack.Screen 
-                name="MainTabs" 
-                component={MainTabs} 
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen 
-                name="PostDetail" 
-                component={PostDetailScreen}
-                options={{ 
-                  headerShown: true,
-                  title: 'Post Details',
-                  headerBackTitle: 'Back'
-                }}
-              />
-            </>
-          ) : (
-            <>
-              <Stack.Screen 
-                name="Login" 
-                component={LoginScreen}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen 
-                name="Signup" 
-                component={SignupScreen}
-                options={{ headerShown: false }}
-              />
-            </>
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
-    </PaperProvider>
-    </AppProvider>
+    <SafeAreaProvider> 
+      <AppProvider>
+        <PaperProvider>
+          <NavigationContainer>
+            <Stack.Navigator>
+            {session ? (
+              <>
+                <Stack.Screen 
+                  name="MainTabs" 
+                  component={MainTabs} 
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen 
+                  name="PostDetail" 
+                  component={PostDetailScreen}
+                  options={{ 
+                    headerShown: true,
+                    title: 'Post Details',
+                    headerBackTitle: 'Back'
+                  }}
+                />
+              </>
+            ) : (
+              <>
+                <Stack.Screen 
+                  name="Login" 
+                  component={LoginScreen}
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen 
+                  name="Signup" 
+                  component={SignupScreen}
+                  options={{ headerShown: false }}
+                />
+              </>
+            )}
+          </Stack.Navigator>
+        </NavigationContainer>
+      </PaperProvider>
+      </AppProvider>
+    </SafeAreaProvider>
   );
 }

@@ -1,15 +1,17 @@
 // screens/ProfileScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, Image, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
-import { Avatar, Title, Button, Text, Card, Divider, ActivityIndicator, Chip } from 'react-native-paper';
+import { View, StyleSheet, FlatList, Image, ScrollView, Dimensions, TouchableOpacity, Alert } from 'react-native';
+import { Avatar, Title, Button, Text, Card, Divider, ActivityIndicator, Chip, IconButton } from 'react-native-paper';
 import { supabase } from '../supabase';
 import { useNavigation } from '@react-navigation/native';
+import { useApp } from '../context/AppContext';
 
 const { width } = Dimensions.get('window');
 const imageSize = (width - 40) / 3;
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
+  const { deletePost: contextDeletePost } = useApp();
   const [profile, setProfile] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,14 +60,50 @@ export default function ProfileScreen() {
     await supabase.auth.signOut();
   };
 
+  const handleDeletePost = (postId, imageUrl) => {
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await contextDeletePost(postId, imageUrl);
+            if (result.success) {
+              // Remove from local state
+              setPosts(posts.filter(post => post.id !== postId));
+              Alert.alert('Success', 'Post deleted successfully');
+            } else {
+              Alert.alert('Error', 'Failed to delete post: ' + (result.error || 'Unknown error'));
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const renderPost = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.postItem}
-      onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
-      activeOpacity={0.7}
-    >
-      <Image source={{ uri: item.image_url }} style={styles.postImage} />
-    </TouchableOpacity>
+    <View style={styles.postItem}>
+      <TouchableOpacity 
+        style={styles.postImageContainer}
+        onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+        activeOpacity={0.7}
+      >
+        <Image source={{ uri: item.image_url }} style={styles.postImage} />
+      </TouchableOpacity>
+      <IconButton
+        icon="delete"
+        size={20}
+        iconColor="white"
+        style={styles.deleteButton}
+        onPress={() => handleDeletePost(item.id, item.image_url)}
+      />
+    </View>
   );
 
   if (loading) {
@@ -228,10 +266,22 @@ const styles = StyleSheet.create({
     width: imageSize,
     height: imageSize,
     margin: 2,
+    position: 'relative',
+  },
+  postImageContainer: {
+    width: '100%',
+    height: '100%',
   },
   postImage: {
     width: '100%',
     height: '100%',
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    margin: 0,
   },
   emptyContainer: {
     padding: 40,
