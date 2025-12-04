@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { TextInput, Button, Text, Title, Snackbar } from 'react-native-paper';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Dimensions } from 'react-native';
+import { TextInput, Button, Text, Title, Snackbar, Surface } from 'react-native-paper';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../supabase';
+
+const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -9,6 +12,7 @@ export default function LoginScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState('');
+  const [secureTextEntry, setSecureTextEntry] = useState(true);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -31,97 +35,282 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
-          <Title style={styles.title}>Welcome Back</Title>
-          <Text style={styles.subtitle}>Login to your account</Text>
+    <View style={styles.container}>
+      {/* Dark Cyberpunk Background */}
+      <LinearGradient
+        colors={['#0a0a12', '#1a1a2e', '#000000']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.background}
+      />
 
-          <TextInput
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            mode="outlined"
-            style={styles.input}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
+      {/* Grid Overlay Effect */}
+      <View style={styles.gridOverlay} pointerEvents="none" />
 
-          <TextInput
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            mode="outlined"
-            secureTextEntry
-            style={styles.input}
-          />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.logoContainer}>
+            <View style={styles.logoGlitch}>
+              <Text style={[styles.logoText, styles.glitchTextRed]}>SYSTEM</Text>
+              <Text style={[styles.logoText, styles.glitchTextCyan]}>SYSTEM</Text>
+              <Text style={styles.logoText}>SYSTEM</Text>
+            </View>
+            <Text style={styles.subLogoText}>ACCESS_TERMINAL_V1.0</Text>
+          </View>
 
-          <Button
-            mode="contained"
-            onPress={handleLogin}
-            loading={loading}
-            disabled={loading}
-            style={styles.button}
-          >
-            Login
-          </Button>
+          <Surface style={styles.card} elevation={0}>
+            <View style={styles.cardHeader}>
+              <View style={styles.headerDot} />
+              <Text style={styles.headerTitle}>USER_LOGIN</Text>
+              <View style={styles.headerLine} />
+            </View>
 
-          <Button
-            mode="text"
-            onPress={() => navigation.navigate('Signup')}
-            style={styles.linkButton}
-          >
-            Don't have an account? Sign Up
-          </Button>
-        </View>
-      </ScrollView>
+            <TextInput
+              label="> ENTER_EMAIL"
+              value={email}
+              onChangeText={setEmail}
+              mode="outlined"
+              style={styles.input}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              textColor="#00f3ff"
+              outlineColor="#333"
+              activeOutlineColor="#00f3ff"
+              theme={{
+                colors: {
+                  onSurfaceVariant: '#666',
+                  background: '#0a0a12'
+                },
+                fonts: {
+                  bodyLarge: { fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' }
+                }
+              }}
+            />
+
+            <TextInput
+              label="> ENTER_PASSWORD"
+              value={password}
+              onChangeText={setPassword}
+              mode="outlined"
+              secureTextEntry={secureTextEntry}
+              style={styles.input}
+              textColor="#00f3ff"
+              outlineColor="#333"
+              activeOutlineColor="#00f3ff"
+              right={
+                <TextInput.Icon
+                  icon={secureTextEntry ? "eye" : "eye-off"}
+                  onPress={() => setSecureTextEntry(!secureTextEntry)}
+                  color="#00f3ff"
+                />
+              }
+              theme={{
+                colors: {
+                  onSurfaceVariant: '#666',
+                  background: '#0a0a12'
+                },
+                fonts: {
+                  bodyLarge: { fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' }
+                }
+              }}
+            />
+
+            <Button
+              mode="contained"
+              onPress={handleLogin}
+              loading={loading}
+              disabled={loading}
+              style={styles.button}
+              contentStyle={styles.buttonContent}
+              labelStyle={styles.buttonLabel}
+            >
+              {loading ? 'INITIALIZING...' : 'INITIATE_SESSION'}
+            </Button>
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>NO_CREDENTIALS?</Text>
+              <Button
+                mode="text"
+                onPress={() => navigation.navigate('Signup')}
+                labelStyle={styles.linkButtonLabel}
+                compact
+              >
+                [CREATE_ID]
+              </Button>
+            </View>
+          </Surface>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <Snackbar
         visible={visible}
         onDismiss={() => setVisible(false)}
         duration={3000}
+        style={styles.snackbar}
+        action={{
+          label: 'CLOSE',
+          onPress: () => setVisible(false),
+          textColor: '#000'
+        }}
       >
-        {message}
+        <Text style={styles.snackbarText}>{message}</Text>
       </Snackbar>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#0a0a12',
+  },
+  background: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+  gridOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 243, 255, 0.05)',
+    // In a real app, we'd use an image or SVG for a proper grid
+    opacity: 0.3,
+  },
+  keyboardView: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-  },
-  content: {
     padding: 20,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    textAlign: 'center',
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 50,
   },
-  subtitle: {
+  logoGlitch: {
+    position: 'relative',
+  },
+  logoText: {
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#fff',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    letterSpacing: 4,
+  },
+  glitchTextRed: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    color: '#ff00ff',
+    opacity: 0.7,
+  },
+  glitchTextCyan: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    color: '#00f3ff',
+    opacity: 0.7,
+  },
+  subLogoText: {
+    color: '#00f3ff',
+    fontSize: 12,
+    marginTop: 5,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    letterSpacing: 2,
+  },
+  card: {
+    padding: 25,
+    backgroundColor: 'rgba(18, 18, 26, 0.8)',
+    borderWidth: 1,
+    borderColor: '#00f3ff',
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+    shadowColor: '#00f3ff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 25,
+  },
+  headerDot: {
+    width: 8,
+    height: 8,
+    backgroundColor: '#00f3ff',
+    marginRight: 10,
+  },
+  headerTitle: {
     fontSize: 16,
-    marginBottom: 30,
-    textAlign: 'center',
-    color: '#666',
+    color: '#00f3ff',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    fontWeight: 'bold',
+  },
+  headerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(0, 243, 255, 0.3)',
+    marginLeft: 10,
   },
   input: {
-    marginBottom: 15,
+    marginBottom: 20,
+    backgroundColor: '#0a0a12',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
   button: {
     marginTop: 10,
-    paddingVertical: 6,
+    backgroundColor: '#00f3ff',
+    borderRadius: 0, // Sharp edges
+    borderWidth: 0,
   },
-  linkButton: {
-    marginTop: 10,
+  buttonContent: {
+    height: 50,
   },
+  buttonLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+    color: '#000',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 25,
+  },
+  footerText: {
+    color: '#666',
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  linkButtonLabel: {
+    color: '#ff00ff',
+    fontWeight: 'bold',
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  snackbar: {
+    backgroundColor: '#00f3ff',
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+  snackbarText: {
+    color: '#000',
+    fontWeight: 'bold',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  }
 });
