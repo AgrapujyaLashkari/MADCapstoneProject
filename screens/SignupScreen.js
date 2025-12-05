@@ -11,6 +11,22 @@ export default function SignupScreen({ navigation }) {
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState('');
 
+  const checkUsername = async (usernameToCheck) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', usernameToCheck)
+        .maybeSingle();
+
+      if (error) throw error;
+      return !!data; // Returns true if username exists
+    } catch (error) {
+      console.error('Error checking username:', error);
+      return false;
+    }
+  };
+
   const handleSignup = async () => {
     if (!email || !password || !username) {
       setMessage('Please fill in all fields');
@@ -19,6 +35,17 @@ export default function SignupScreen({ navigation }) {
     }
 
     setLoading(true);
+
+    // 1. Check Username Uniqueness
+    const usernameExists = await checkUsername(username);
+    if (usernameExists) {
+      setMessage('Username already taken. Please choose another.');
+      setVisible(true);
+      setLoading(false);
+      return;
+    }
+
+    // 2. Sign Up
     const { data, error } = await supabase.auth.signUp({
       email: email,
       password: password,
@@ -30,34 +57,41 @@ export default function SignupScreen({ navigation }) {
     });
 
     if (error) {
+      // Handle "User already registered" specifically if needed, though error.message is usually good
       setMessage(error.message);
       setVisible(true);
     } else {
-      // Create user profile
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([
-          { 
-            id: data.user.id, 
-            username: username,
-            email: email 
-          }
-        ]);
+      // 3. Create user profile
+      if (data?.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: data.user.id,
+              username: username,
+              email: email
+            }
+          ]);
 
-      if (profileError) {
-        setMessage('Account created but profile setup failed');
-        setVisible(true);
-      } else {
-        setMessage('Account created successfully!');
-        setVisible(true);
-        setTimeout(() => navigation.navigate('Login'), 2000);
+        if (profileError) {
+          console.error('Profile creation error:', profileError);
+          // If profile creation fails (e.g. constraint violation), show error
+          setMessage('Account created but profile setup failed: ' + profileError.message);
+          setVisible(true);
+        } else {
+          setMessage('Account created successfully!');
+          setVisible(true);
+
+          // If session exists, App.js will automatically switch to MainTabs
+          // No need to navigate manually
+        }
       }
     }
     setLoading(false);
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >

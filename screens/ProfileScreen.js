@@ -1,37 +1,66 @@
 // screens/ProfileScreen.js
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, Image, ScrollView, Dimensions, TouchableOpacity, Alert } from 'react-native';
-import { Avatar, Title, Button, Text, Card, Divider, ActivityIndicator, Chip, IconButton } from 'react-native-paper';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  StyleSheet,
+  FlatList,
+  ScrollView,
+  Dimensions,
+  TouchableOpacity,
+  Platform,
+  Alert
+} from 'react-native';
+import { Avatar, Text } from 'react-native-paper';
+import { Image } from 'expo-image'; // Use expo-image
 import { supabase } from '../supabase';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
-const imageSize = (width - 40) / 3;
+const COLUMN_COUNT = 2; // Chunky 2-column grid
+const IMAGE_SIZE = (width - 60) / COLUMN_COUNT; // Adjust for padding
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const { deletePost: contextDeletePost } = useApp();
   const [profile, setProfile] = useState(null);
   const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('posts');
 
   useEffect(() => {
     fetchProfile();
-    fetchUserPosts();
   }, []);
 
-  const fetchProfile = async () => {
+  useFocusEffect(
+    useCallback(() => {
+      fetchUserPosts();
+    }, [])
+  );
+
+  const fetchProfile = async (retries = 3) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle(); // Use maybeSingle to avoid error on 0 rows
 
       if (error) throw error;
+
+      if (!data) {
+        // Profile not found yet
+        if (retries > 0) {
+          console.log(`Profile not found, retrying... (${retries} left)`);
+          setTimeout(() => fetchProfile(retries - 1), 1000); // Wait 1s and retry
+        } else {
+          console.error('Profile not found after retries');
+        }
+        return;
+      }
+
       setProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -51,8 +80,6 @@ export default function ProfileScreen() {
       setPosts(data || []);
     } catch (error) {
       console.error('Error fetching posts:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -60,26 +87,22 @@ export default function ProfileScreen() {
     await supabase.auth.signOut();
   };
 
-  const handleDeletePost = (postId, imageUrl) => {
+  const handleDeletePost = (post) => {
     Alert.alert(
-      'Delete Post',
-      'Are you sure you want to delete this post?',
+      "Delete Post",
+      "Are you sure you want to delete this post?",
       [
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Cancel',
-          style: 'cancel'
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
+          text: "Delete",
+          style: "destructive",
           onPress: async () => {
-            const result = await contextDeletePost(postId, imageUrl);
-            if (result.success) {
-              // Remove from local state
-              setPosts(posts.filter(post => post.id !== postId));
-              Alert.alert('Success', 'Post deleted successfully');
+            const { success, error } = await contextDeletePost(post.id, post.image_url);
+            if (success) {
+              setPosts(prev => prev.filter(p => p.id !== post.id));
+              Alert.alert("Deleted", "Post has been deleted.");
             } else {
-              Alert.alert('Error', 'Failed to delete post: ' + (result.error || 'Unknown error'));
+              Alert.alert("Error", error || "Failed to delete post.");
             }
           }
         }
@@ -88,105 +111,85 @@ export default function ProfileScreen() {
   };
 
   const renderPost = ({ item }) => (
-    <View style={styles.postItem}>
-      <TouchableOpacity 
-        style={styles.postImageContainer}
-        onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
-        activeOpacity={0.7}
-      >
-        <Image source={{ uri: item.image_url }} style={styles.postImage} />
-      </TouchableOpacity>
-      <IconButton
-        icon="delete"
-        size={20}
-        iconColor="white"
-        style={styles.deleteButton}
-        onPress={() => handleDeletePost(item.id, item.image_url)}
+    <TouchableOpacity
+      style={styles.gridItem}
+      onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+      onLongPress={() => handleDeletePost(item)} // Add Delete on Long Press
+      activeOpacity={0.9}
+    >
+      <Image
+        source={{ uri: item.image_url }}
+        style={styles.gridImage}
+        contentFit="cover"
+        transition={200}
+        placeholder={require('../assets/adaptive-icon.png')}
       />
-    </View>
+      {item.media_type === 'video' && (
+        <View style={styles.videoBadge}>
+          <Ionicons name="play" size={16} color="#000" />
+        </View>
+      )}
+    </TouchableOpacity>
   );
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <Title style={styles.headerTitle}>Profile</Title>
-        <Button 
-          icon="logout" 
-          mode="text" 
-          onPress={handleLogout}
-          textColor="white"
-        >
-          Logout
-        </Button>
+        <Text style={styles.headerTitle}>PROFILE_ID</Text>
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+          <Ionicons name="log-out-outline" size={24} color="#000" />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView>
-        <View style={styles.profileHeader}>
-          <Avatar.Icon size={80} icon="account" style={styles.avatar} />
-          <Title style={styles.username}>{profile?.username || 'User'}</Title>
-          <Text style={styles.email}>{profile?.email}</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* ID Card Box */}
+        <View style={styles.idCard}>
+          <View style={styles.idHeader}>
+            <Text style={styles.idLabel}>IDENTIFICATION</Text>
+            <View style={styles.idHole} />
+          </View>
 
-          <View style={styles.statsContainer}>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>{posts.length}</Text>
-              <Text style={styles.statLabel}>Posts</Text>
+          <View style={styles.idContent}>
+            <View style={styles.avatarBox}>
+              <Avatar.Icon size={80} icon="account" style={styles.avatar} color="#000" />
             </View>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>0</Text>
-              <Text style={styles.statLabel}>Friends</Text>
+            <View style={styles.idInfo}>
+              <Text style={styles.username}>@{profile?.username || 'user'}</Text>
+              <Text style={styles.role}>CREATOR</Text>
+              <Text style={styles.email}>{profile?.email}</Text>
             </View>
           </View>
         </View>
 
-        <Divider />
-
-        <View style={styles.tabContainer}>
-          <Chip
-            selected={activeTab === 'posts'}
-            onPress={() => setActiveTab('posts')}
-            style={styles.tab}
-            mode={activeTab === 'posts' ? 'flat' : 'outlined'}
-          >
-            Posts
-          </Chip>
-          <Chip
-            selected={activeTab === 'friends'}
-            onPress={() => setActiveTab('friends')}
-            style={styles.tab}
-            mode={activeTab === 'friends' ? 'flat' : 'outlined'}
-          >
-            Friends
-          </Chip>
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <View style={[styles.statBox, { backgroundColor: '#FFD700' }]}>
+            <Text style={styles.statNumber}>{posts.length}</Text>
+            <Text style={styles.statLabel}>POSTS</Text>
+          </View>
+          <View style={[styles.statBox, { backgroundColor: '#FF69B4' }]}>
+            <Text style={styles.statNumber}>128</Text>
+            <Text style={styles.statLabel}>FANS</Text>
+          </View>
         </View>
 
-        {activeTab === 'posts' ? (
-          posts.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No posts yet</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={posts}
-              renderItem={renderPost}
-              keyExtractor={(item) => item.id.toString()}
-              numColumns={3}
-              contentContainerStyle={styles.postsGrid}
-              scrollEnabled={false}
-            />
-          )
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No friends yet</Text>
-          </View>
-        )}
+        {/* Grid Header */}
+        <View style={styles.gridHeader}>
+          <Text style={styles.gridTitle}>GALLERY</Text>
+          <View style={styles.gridLine} />
+        </View>
+
+        {/* Grid */}
+        <FlatList
+          data={posts}
+          renderItem={renderPost}
+          keyExtractor={(item) => item.id.toString()}
+          numColumns={COLUMN_COUNT}
+          scrollEnabled={false}
+          contentContainerStyle={styles.gridContainer}
+          columnWrapperStyle={styles.gridColumnWrapper}
+        />
       </ScrollView>
     </View>
   );
@@ -195,100 +198,192 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f0f0f0',
   },
   header: {
-    padding: 15,
-    backgroundColor: '#6200ee',
-    paddingTop: 50,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 3,
+    borderBottomColor: '#000',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#000',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  logoutBtn: {
+    padding: 5,
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#FF69B4', // Pink
+    // Hard Shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 100,
+  },
+  idCard: {
+    backgroundColor: '#fff',
+    borderWidth: 3,
+    borderColor: '#000',
+    marginBottom: 20,
+    // Hard Shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+  },
+  idHeader: {
+    backgroundColor: '#4169E1', // Blue
+    padding: 8,
+    borderBottomWidth: 3,
+    borderBottomColor: '#000',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  headerTitle: {
-    color: 'white',
-    fontSize: 24,
-    fontWeight: 'bold',
+  idLabel: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 12,
+    letterSpacing: 1,
   },
-  loadingContainer: {
-    flex: 1,
+  idHole: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#000',
+  },
+  idContent: {
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarBox: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    borderWidth: 3,
+    borderColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  profileHeader: {
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: 'white',
+    backgroundColor: '#f0f0f0',
+    marginRight: 20,
   },
   avatar: {
-    backgroundColor: '#6200ee',
-    marginBottom: 10,
+    backgroundColor: 'transparent',
   },
-  username: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 5,
-  },
-  email: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 15,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    marginTop: 10,
-    gap: 40,
-  },
-  stat: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    padding: 10,
-    gap: 10,
-    backgroundColor: 'white',
-  },
-  tab: {
+  idInfo: {
     flex: 1,
   },
-  postsGrid: {
-    padding: 2,
+  username: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#000',
+    marginBottom: 4,
   },
-  postItem: {
-    width: imageSize,
-    height: imageSize,
-    margin: 2,
-    position: 'relative',
+  role: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
+    backgroundColor: '#000',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginBottom: 8,
   },
-  postImageContainer: {
-    width: '100%',
-    height: '100%',
-  },
-  postImage: {
-    width: '100%',
-    height: '100%',
-  },
-  deleteButton: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    margin: 0,
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
+  email: {
+    fontSize: 12,
     color: '#666',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 15,
+    marginBottom: 30,
+  },
+  statBox: {
+    flex: 1,
+    borderWidth: 3,
+    borderColor: '#000',
+    padding: 15,
+    alignItems: 'center',
+    // Hard Shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#000',
+  },
+  statLabel: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#000',
+    marginTop: 4,
+  },
+  gridHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  gridTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#000',
+    marginRight: 10,
+  },
+  gridLine: {
+    flex: 1,
+    height: 3,
+    backgroundColor: '#000',
+  },
+  gridContainer: {
+    gap: 15,
+  },
+  gridColumnWrapper: {
+    gap: 15,
+  },
+  gridItem: {
+    width: IMAGE_SIZE,
+    height: IMAGE_SIZE,
+    borderWidth: 3,
+    borderColor: '#000',
+    backgroundColor: '#fff',
+    marginBottom: 15,
+    // Hard Shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+  },
+  gridImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#eee',
+  },
+  videoBadge: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#000',
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
